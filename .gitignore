@@ -1,0 +1,28 @@
+# Supabase credentials — NEVER commit this
+Sources/BizCoreMobile/Config.plist
+Config.plist
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+.build/
+*.o
+*.d
+*.dia
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+
+# macOS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Outputs
+outputs/
