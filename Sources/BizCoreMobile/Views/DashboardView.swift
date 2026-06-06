@@ -2,15 +2,18 @@ import SwiftUI
 import SwiftData
 
 // MARK: - DashboardView
-// Main inventory screen — replaces Day 1 placeholder
+// Main inventory screen
 // Features: search, segmented filter, summary chips, ProductRowView list,
-//           pull-to-refresh, restock sheet, error alert
+//           pull-to-refresh, restock sheet, error alert, notification sync
 
 struct DashboardView: View {
 
     @Environment(\.modelContext) private var context
     @Query(sort: \Product.name) private var products: [Product]
     @State private var viewModel = InventoryViewModel()
+
+    // Shared NotificationViewModel — updates badge count after restock
+    var notificationViewModel: NotificationViewModel
 
     var body: some View {
         NavigationStack {
@@ -76,6 +79,16 @@ struct DashboardView: View {
                 Button("OK") { viewModel.errorMessage = nil }
             } message: {
                 Text(viewModel.errorMessage ?? "")
+            }
+            // After restock sheet closes, re-run low-stock check
+            // so Alerts tab badge count updates immediately
+            .onChange(of: viewModel.showRestockSheet) { _, isShowing in
+                if !isShowing {
+                    Task {
+                        await notificationViewModel.triggerLowStockCheck(products: products)
+                        await notificationViewModel.refreshStatus()
+                    }
+                }
             }
         }
     }
@@ -238,8 +251,6 @@ struct DashboardView: View {
 }
 
 // MARK: - RestockSheet
-// Presented as a sheet from DashboardView and ProductDetailView
-
 struct RestockSheet: View {
 
     let product: Product
@@ -346,6 +357,7 @@ struct RestockSheet: View {
     }
 }
 
+// MARK: - ProductDetailView
 struct ProductDetailView: View {
 
     let product: Product
@@ -383,7 +395,6 @@ struct ProductDetailView: View {
 
                 // Action buttons
                 HStack(spacing: 12) {
-                    // Restock button
                     Button {
                         viewModel.selectedProduct = product
                         viewModel.showRestockSheet = true
@@ -398,7 +409,6 @@ struct ProductDetailView: View {
                     }
                     .minTapTarget()
 
-                    // Flag button
                     Button {
                         Task {
                             await viewModel.toggleFlag(product: product, context: context)
@@ -438,7 +448,6 @@ struct ProductDetailView: View {
         }
         .navigationTitle(product.name)
         .navigationBarTitleDisplayMode(.large)
-        // Restock sheet
         .sheet(isPresented: $viewModel.showRestockSheet) {
             RestockSheet(product: product, viewModel: viewModel, context: context)
         }
@@ -453,18 +462,15 @@ struct ProductDetailView: View {
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    // Background track
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color(.systemGray5))
                         .frame(height: 8)
 
-                    // Fill
                     RoundedRectangle(cornerRadius: 4)
                         .fill(quantityColor)
                         .frame(width: geo.size.width * fillRatio, height: 8)
                         .animation(.easeOut, value: fillRatio)
 
-                    // Reorder threshold marker
                     let markerX = geo.size.width * thresholdRatio
                     Rectangle()
                         .fill(Color(.systemOrange))
@@ -493,7 +499,6 @@ struct ProductDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    // MARK: - Meta Row
     private func metaRow(label: String, value: String) -> some View {
         HStack {
             Text(label)
@@ -506,7 +511,6 @@ struct ProductDetailView: View {
         }
     }
 
-    // MARK: - Helpers
     private var maxValue: Int { max(product.reorderLevel * 3, product.quantity + 1) }
     private var fillRatio: CGFloat { min(CGFloat(product.quantity) / CGFloat(maxValue), 1.0) }
     private var thresholdRatio: CGFloat { min(CGFloat(product.reorderLevel) / CGFloat(maxValue), 1.0) }
@@ -522,7 +526,7 @@ struct ProductDetailView: View {
 
 // MARK: - Previews
 #Preview("Dashboard") {
-    DashboardView()
+    DashboardView(notificationViewModel: NotificationViewModel())
         .modelContainer(for: Product.self, inMemory: true)
 }
 
