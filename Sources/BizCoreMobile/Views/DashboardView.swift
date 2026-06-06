@@ -346,7 +346,6 @@ struct RestockSheet: View {
     }
 }
 
-// MARK: - ProductDetailView (placeholder — full version Day 4)
 struct ProductDetailView: View {
 
     let product: Product

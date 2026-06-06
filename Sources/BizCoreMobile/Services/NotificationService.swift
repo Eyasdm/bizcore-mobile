@@ -24,9 +24,25 @@ actor NotificationService {
         return settings.authorizationStatus == .authorized
     }
 
+    // MARK: - Quiet Hours
+
+    /// Returns true if the current hour falls inside the quiet window.
+    /// Handles wrap-around — e.g. quietStart 22, quietEnd 7 correctly covers 22:00–06:59.
+    func isInQuietHours(quietStart: Int, quietEnd: Int) -> Bool {
+        let hour = Calendar.current.component(.hour, from: Date())
+        if quietStart >= quietEnd {
+            // Window wraps midnight
+            return hour >= quietStart || hour < quietEnd
+        } else {
+            return hour >= quietStart && hour < quietEnd
+        }
+    }
+
     // MARK: - Low Stock Check
 
-    func checkAndNotify(products: [Product]) async {
+    func checkAndNotify(products: [Product], quietStart: Int, quietEnd: Int) async {
+        guard !isInQuietHours(quietStart: quietStart, quietEnd: quietEnd) else { return }
+
         let lowStockProducts = products.filter { $0.quantity <= $0.reorderLevel }
 
         await cancelLowStockNotifications()
@@ -68,7 +84,7 @@ actor NotificationService {
     private func scheduleNotification(for product: Product) async {
         let content = UNMutableNotificationContent()
         content.title = "Low Stock Alert"
-        content.body = "\(product.name) is low — \(product.quantity) \(product.unit) remaining (reorder level: \(product.reorderLevel))"
+        content.body  = "\(product.name) is low — \(product.quantity) \(product.unit) remaining (reorder level: \(product.reorderLevel))"
         content.sound = .default
         content.categoryIdentifier = categoryIdentifier
 
@@ -76,8 +92,8 @@ actor NotificationService {
 
         let request = UNNotificationRequest(
             identifier: notificationID(for: product.id),
-            content: content,
-            trigger: trigger
+            content:    content,
+            trigger:    trigger
         )
 
         try? await center.add(request)
