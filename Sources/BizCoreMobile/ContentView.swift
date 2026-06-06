@@ -1,27 +1,28 @@
 import SwiftUI
 
+// MARK: - ContentView
+// Root TabView — wires Dashboard and Alerts tabs
+// InventoryViewModel is shared so notifications can access product list
+
 struct ContentView: View {
 
-    /// Shared across tabs so the badge reflects live pending count
-    /// and DashboardView can trigger checks after a restock.
-    @State private var notificationViewModel = NotificationViewModel()
+    // Shared across both tabs so NotificationSettingsView
+    // can trigger low-stock checks against live inventory
+    @State private var inventoryViewModel = InventoryViewModel()
 
     var body: some View {
         TabView {
-            DashboardView(notificationViewModel: notificationViewModel)
+            DashboardView(sharedViewModel: inventoryViewModel)
                 .tabItem {
                     Label("Inventory", systemImage: "cube.box.fill")
                 }
 
-            NotificationSettingsView(notificationViewModel: notificationViewModel)
+            NotificationSettingsView()
                 .tabItem {
                     Label("Alerts", systemImage: "bell.fill")
                 }
-                .badge(notificationViewModel.pendingAlertCount > 0
-                       ? notificationViewModel.pendingAlertCount
-                       : 0)
         }
-        .tint(.accent)
+        .tint(.accentColor)
     }
 }
 

@@ -2,234 +2,261 @@ import SwiftUI
 import SwiftData
 
 // MARK: - NotificationSettingsView
-// Full Alerts tab — permission gate, status summary, frequency picker,
-// quiet hours picker, and a manual low-stock check trigger.
-// Receives NotificationViewModel from ContentView so the tab badge stays in sync.
+// Full notification settings screen — replaces Day 1 placeholder
+// Features: permission toggle, low/critical toggles, frequency picker,
+//           quiet hours, test notification button, pending alert count
 
 struct NotificationSettingsView: View {
 
+    @Environment(\.modelContext) private var context
     @Query(sort: \Product.name) private var products: [Product]
-    @Bindable var notificationViewModel: NotificationViewModel
+    @State private var viewModel = NotificationViewModel()
+    @State private var showPermissionAlert = false
 
     var body: some View {
         NavigationStack {
             List {
 
-                // ── 1. Permission Banner ──────────────────────────────────
-                permissionSection
-
-                // ── 2. Status Summary ─────────────────────────────────────
-                if notificationViewModel.isPermissionGranted {
-                    statusSection
+                // MARK: Permission Section
+                Section {
+                    permissionRow
+                } header: {
+                    Text("Notification Access")
+                } footer: {
+                    Text("Required to receive low-stock alerts on your device.")
                 }
 
-                // ── 3. Alert Frequency ────────────────────────────────────
-                if notificationViewModel.isPermissionGranted {
-                    frequencySection
+                // MARK: Alert Types Section
+                if viewModel.isPermissionGranted {
+                    Section {
+                        Toggle(isOn: Binding(
+                            get: { viewModel.lowStockAlertsEnabled },
+                            set: { viewModel.lowStockAlertsEnabled = $0 }
+                        )) {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Low Stock Alerts")
+                                        .font(.body)
+                                    Text("Products below reorder level × 2")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(Color(.systemOrange))
+                            }
+                        }
+                        .minTapTarget()
+
+                        Toggle(isOn: Binding(
+                            get: { viewModel.criticalAlertsEnabled },
+                            set: { viewModel.criticalAlertsEnabled = $0 }
+                        )) {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Critical Alerts")
+                                        .font(.body)
+                                    Text("Products below reorder level")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(Color(.systemRed))
+                            }
+                        }
+                        .minTapTarget()
+
+                    } header: {
+                        Text("Alert Types")
+                    }
+
+                    // MARK: Frequency Section
+                    Section {
+                        Picker("Check Frequency", selection: $viewModel.checkFrequency) {
+                            ForEach(CheckFrequency.allCases) { freq in
+                                Text(freq.label).tag(freq)
+                            }
+                        }
+                        .pickerStyle(.navigationLink)
+                        .minTapTarget()
+                    } header: {
+                        Text("Check Frequency")
+                    } footer: {
+                        Text("How often the app checks for low-stock products in the background.")
+                    }
+
+                    // MARK: Quiet Hours Section
+                    Section {
+                        HStack {
+                            Label("Start", systemImage: "moon.fill")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Picker("Quiet Start", selection: $viewModel.quietStartHour) {
+                                ForEach(0..<24, id: \.self) { hour in
+                                    Text(hourLabel(hour)).tag(hour)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .minTapTarget()
+                        }
+
+                        HStack {
+                            Label("End", systemImage: "sun.rise.fill")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Picker("Quiet End", selection: $viewModel.quietEndHour) {
+                                ForEach(0..<24, id: \.self) { hour in
+                                    Text(hourLabel(hour)).tag(hour)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .minTapTarget()
+                        }
+                    } header: {
+                        Text("Quiet Hours")
+                    } footer: {
+                        Text("No alerts will be sent between \(hourLabel(viewModel.quietStartHour)) and \(hourLabel(viewModel.quietEndHour)).")
+                    }
+
+                    // MARK: Status Section
+                    Section {
+                        HStack {
+                            Label("Pending Alerts", systemImage: "bell.badge")
+                            Spacer()
+                            Text("\(viewModel.pendingAlertCount)")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(
+                                    viewModel.pendingAlertCount > 0
+                                    ? Color(.systemOrange)
+                                    : .secondary
+                                )
+                        }
+
+                        // Check now button
+                        Button {
+                            Task {
+                                await viewModel.triggerLowStockCheck(products: products)
+                            }
+                        } label: {
+                            Label("Check Inventory Now", systemImage: "arrow.clockwise")
+                                .foregroundStyle(Color.accentColor)
+                        }
+                        .minTapTarget()
+
+                        // Test notification button
+                        Button {
+                            Task {
+                                await viewModel.sendTestNotification()
+                            }
+                        } label: {
+                            Label("Send Test Notification", systemImage: "paperplane.fill")
+                                .foregroundStyle(Color.accentColor)
+                        }
+                        .minTapTarget()
+
+                    } header: {
+                        Text("Status")
+                    } footer: {
+                        Text("Last checked: \(viewModel.lastCheckedLabel)")
+                    }
                 }
 
-                // ── 4. Quiet Hours ────────────────────────────────────────
-                if notificationViewModel.isPermissionGranted {
-                    quietHoursSection
+                // MARK: About Section
+                Section {
+                    HStack(spacing: 12) {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(.secondary)
+                        Text("Notifications are delivered locally — no internet connection required.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
                 }
-
-                // ── 5. Manual Check ───────────────────────────────────────
-                if notificationViewModel.isPermissionGranted {
-                    manualCheckSection
-                }
-
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Alerts")
             .navigationBarTitleDisplayMode(.large)
             .task {
-                await notificationViewModel.refreshStatus()
+                await viewModel.refreshStatus()
             }
-        }
-    }
-
-    // MARK: - Permission Section
-
-    private var permissionSection: some View {
-        Section {
-            if notificationViewModel.isPermissionGranted {
-                HStack(spacing: 12) {
-                    Image(systemName: "bell.badge.fill")
-                        .font(.title2)
-                        .foregroundStyle(Color(.systemGreen))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Notifications Enabled")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        Text("BizCore can send low-stock alerts to this device.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            .alert("Enable Notifications", isPresented: $showPermissionAlert) {
+                Button("Open Settings") {
+                    if let url = URL(string: UIKit.UIApplication.openSettingsURLString) {
+                        UIKit.UIApplication.shared.open(url)
                     }
                 }
-                .padding(.vertical, 4)
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "bell.slash.fill")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Notifications Off")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Text("Enable alerts to get notified when stock runs low.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Button {
-                        Task { await notificationViewModel.requestPermission() }
-                    } label: {
-                        Text("Enable Notifications")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 40)
-                            .background(Color.accentColor)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        if let url = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(url)
-                        }
-                    } label: {
-                        Text("Open System Settings")
-                            .font(.caption)
-                            .frame(maxWidth: .infinity)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.vertical, 6)
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Please enable notifications for BizCore in Settings to receive low-stock alerts.")
             }
-        } header: {
-            Text("Permission")
         }
     }
 
-    // MARK: - Status Section
-
-    private var statusSection: some View {
-        Section {
-            HStack {
-                Label("Pending Low-Stock Alerts", systemImage: "tray.and.arrow.down")
-                Spacer()
-                if notificationViewModel.pendingAlertCount == 0 {
-                    Text("None")
-                        .foregroundStyle(.secondary)
-                        .font(.subheadline)
-                } else {
-                    Text("\(notificationViewModel.pendingAlertCount)")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color(.systemOrange))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 3)
-                        .background(Color(.systemOrange).opacity(0.12))
-                        .clipShape(Capsule())
-                }
+    // MARK: - Permission Row
+    private var permissionRow: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(viewModel.isPermissionGranted
+                          ? Color(.systemGreen).opacity(0.15)
+                          : Color(.systemRed).opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: viewModel.isPermissionGranted
+                      ? "bell.fill"
+                      : "bell.slash.fill")
+                    .foregroundStyle(viewModel.isPermissionGranted
+                                     ? Color(.systemGreen)
+                                     : Color(.systemRed))
             }
-        } header: {
-            Text("Status")
-        } footer: {
-            Text("Pending alerts scheduled but not yet delivered.")
-        }
-    }
 
-    // MARK: - Frequency Section
-
-    private var frequencySection: some View {
-        Section {
-            Picker("Check Frequency", selection: $notificationViewModel.checkFrequency) {
-                ForEach(CheckFrequency.allCases) { freq in
-                    Text(freq.label).tag(freq)
-                }
-            }
-            .pickerStyle(.menu)
-        } header: {
-            Text("Alert Frequency")
-        } footer: {
-            Text("How often BizCore checks inventory and may send alerts.")
-        }
-    }
-
-    // MARK: - Quiet Hours Section
-
-    private var quietHoursSection: some View {
-        Section {
-            HStack {
-                Text("Do Not Disturb From")
-                Spacer()
-                hourPicker(selection: $notificationViewModel.quietStartHour)
-            }
-            HStack {
-                Text("Until")
-                Spacer()
-                hourPicker(selection: $notificationViewModel.quietEndHour)
-            }
-        } header: {
-            Text("Quiet Hours")
-        } footer: {
-            Text("No alerts will be sent during this window. Wrap-around (e.g. 10 PM – 7 AM) is supported.")
-        }
-    }
-
-    private func hourPicker(selection: Binding<Int>) -> some View {
-        Picker("Hour", selection: selection) {
-            ForEach(0..<24, id: \.self) { hour in
-                Text(hourLabel(hour)).tag(hour)
-            }
-        }
-        .pickerStyle(.menu)
-        .labelsHidden()
-    }
-
-    private func hourLabel(_ hour: Int) -> String {
-        var comps = DateComponents()
-        comps.hour = hour
-        comps.minute = 0
-        if let date = Calendar.current.date(from: comps) {
-            let fmt = DateFormatter()
-            fmt.dateFormat = "h a"
-            return fmt.string(from: date)
-        }
-        return "\(hour):00"
-    }
-
-    // MARK: - Manual Check Section
-
-    private var manualCheckSection: some View {
-        Section {
-            Button {
-                Task {
-                    await notificationViewModel.triggerLowStockCheck(products: products)
-                    await notificationViewModel.refreshStatus()
-                }
-            } label: {
-                Label("Check Now", systemImage: "arrow.clockwise.circle.fill")
+            VStack(alignment: .leading, spacing: 2) {
+                Text(viewModel.isPermissionGranted ? "Notifications Enabled" : "Notifications Disabled")
+                    .font(.body)
                     .fontWeight(.medium)
-                    .foregroundStyle(Color.accentColor)
+                Text(viewModel.isPermissionGranted
+                     ? "BizCore can send low-stock alerts"
+                     : "Tap to enable in Settings")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-        } header: {
-            Text("Manual Check")
-        } footer: {
-            Text("Instantly scan inventory and schedule alerts for low-stock products (quiet hours still apply).")
+
+            Spacer()
+
+            if !viewModel.isPermissionGranted {
+                Button("Enable") {
+                    Task {
+                        await viewModel.requestPermission()
+                        if !viewModel.isPermissionGranted {
+                            showPermissionAlert = true
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .minTapTarget()
+            }
         }
+        .padding(.vertical, 4)
+    }
+
+    // MARK: - Hour Label Helper
+    private func hourLabel(_ hour: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        var components = DateComponents()
+        components.hour   = hour
+        components.minute = 0
+        guard let date = Calendar.current.date(from: components) else {
+            return "\(hour):00"
+        }
+        return formatter.string(from: date)
     }
 }
 
 // MARK: - Preview
-
 #Preview {
-    NotificationSettingsView(notificationViewModel: NotificationViewModel())
+    NotificationSettingsView()
         .modelContainer(for: Product.self, inMemory: true)
 }
