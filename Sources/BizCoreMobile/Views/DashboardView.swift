@@ -11,6 +11,7 @@ struct DashboardView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Product.name) private var products: [Product]
     @State private var viewModel = InventoryViewModel()
+    var notificationViewModel: NotificationViewModel
 
     var body: some View {
         NavigationStack {
@@ -76,6 +77,15 @@ struct DashboardView: View {
                 Button("OK") { viewModel.errorMessage = nil }
             } message: {
                 Text(viewModel.errorMessage ?? "")
+            }
+            // After restock sheet closes, re-run low-stock check so Alerts tab badge updates
+            .onChange(of: viewModel.showRestockSheet) { _, isShowing in
+                if !isShowing {
+                    Task {
+                        await notificationViewModel.triggerLowStockCheck(products: products)
+                        await notificationViewModel.refreshStatus()
+                    }
+                }
             }
         }
     }
@@ -522,7 +532,7 @@ struct ProductDetailView: View {
 
 // MARK: - Previews
 #Preview("Dashboard") {
-    DashboardView()
+    DashboardView(notificationViewModel: NotificationViewModel())
         .modelContainer(for: Product.self, inMemory: true)
 }
 
