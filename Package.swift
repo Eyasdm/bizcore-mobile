@@ -15,7 +15,10 @@ let package = Package(
     targets: [
         .target(
             name: "BizCoreMobile",
-            path: "Sources/BizCoreMobile"
+            path: "Sources/BizCoreMobile",
+            resources: [
+                .process("Resources")
+            ]
         )
     ]
 )
