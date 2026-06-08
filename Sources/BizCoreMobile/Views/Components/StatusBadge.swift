@@ -21,6 +21,12 @@ struct StatusBadge: View {
         .background(backgroundColor)
         .foregroundStyle(foregroundColor)
         .clipShape(Capsule())
+        // Without .accessibilityElement(children: .ignore), VoiceOver reads both
+        // the SF Symbol name AND the label text as separate elements, producing
+        // something like "exclamationmark dot triangle dot fill Low".
+        // Combined label gives "Status: Low" which is accurate and concise.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Status: \(status.label)")
     }
 
     // MARK: - Colors (semantic — dark mode safe)

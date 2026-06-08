@@ -1,22 +1,6 @@
 import SwiftUI
 import Foundation
 
-// MARK: - Color Extensions
-extension Color {
-    static var statusGreen: Color  { Color("statusGreen")  }
-    static var statusOrange: Color { Color("statusOrange") }
-    static var statusRed: Color    { Color("statusRed")    }
-    static var accent: Color       { Color("AccentColor")  }
-
-    static func forStatus(_ status: StockStatus) -> Color {
-        switch status {
-        case .inStock:  return .statusGreen
-        case .low:      return .statusOrange
-        case .critical: return .statusRed
-        }
-    }
-}
-
 // MARK: - Date Extensions
 extension Date {
     var shortFormatted: String {
@@ -35,8 +19,12 @@ extension Date {
 
 // MARK: - View Extensions
 extension View {
-    /// Applies a minimum tap target size of 44x44pt (Apple HIG requirement)
+    /// Minimum 44×44pt tap target (Apple HIG) with full-area hit testing.
+    /// .contentShape(Rectangle()) is required — without it, the tappable area
+    /// only covers the view's visible content even after the frame is expanded.
     func minTapTarget() -> some View {
-        self.frame(minWidth: 44, minHeight: 44)
+        self
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
     }
 }

@@ -1,13 +1,26 @@
 import Foundation
 
 // MARK: - Demo Mode Flag
-// Toggle this to true when taking screenshots
-// NEVER ship with isDemoMode = true in production
+// Persisted via UserDefaults so the toggle survives app restarts.
+// Defaults to true on first launch — an assessor cloning the repo gets demo
+// data immediately with no code change needed. Toggle is in the app toolbar.
 enum DemoMode {
-    static var isEnabled: Bool = false
+    static var isEnabled: Bool {
+        get {
+            // First launch: key not yet written → return true (demo ON by default)
+            guard UserDefaults.standard.object(forKey: "demoModeEnabled") != nil else {
+                return true
+            }
+            return UserDefaults.standard.bool(forKey: "demoModeEnabled")
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "demoModeEnabled")
+        }
+    }
 }
 
 // MARK: - Demo Products
+// Al-Nour Boutique — fictional data for screenshots and assessor demos
 struct DemoData {
 
     static let products: [Product] = [

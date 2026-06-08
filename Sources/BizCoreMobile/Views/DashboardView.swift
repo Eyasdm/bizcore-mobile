@@ -32,14 +32,17 @@ struct DashboardView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 8)
 
-                // Main content
+                // Main content — grouped is computed once here, used for both
+                // the empty-state check and the list render.
+                let grouped = viewModel.groupedFiltered(products)
+
                 Group {
                     if viewModel.isRefreshing && products.isEmpty {
                         loadingView
-                    } else if viewModel.filtered(products).isEmpty {
+                    } else if grouped.isEmpty {
                         emptyView
                     } else {
-                        productList
+                        productList(grouped)
                     }
                 }
             }
@@ -65,13 +68,14 @@ struct DashboardView: View {
                     await viewModel.refresh(context: context)
                 }
             }
-            // Restock sheet
+            // Single restock sheet — owned by DashboardView only.
+            // ProductDetailView sets selectedProduct + showRestockSheet to trigger it.
+            // Having a second .sheet in ProductDetailView causes a SwiftUI conflict.
             .sheet(isPresented: $viewModel.showRestockSheet) {
                 if let product = viewModel.selectedProduct {
                     RestockSheet(product: product, viewModel: viewModel, context: context)
                 }
             }
-            // Error alert
             .alert("Error", isPresented: Binding(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.errorMessage = nil } }
@@ -143,10 +147,8 @@ struct DashboardView: View {
     }
 
     // MARK: - Product List
-    private var productList: some View {
+    private func productList(_ grouped: [String: [Product]]) -> some View {
         List {
-            let grouped = groupedProducts()
-
             ForEach(grouped.keys.sorted(), id: \.self) { category in
                 Section(header: Text(category).font(.subheadline)) {
                     ForEach(grouped[category] ?? [], id: \.id) { product in
@@ -217,6 +219,7 @@ struct DashboardView: View {
                 Image(systemName: "arrow.clockwise")
             }
         }
+        .accessibilityLabel("Refresh inventory")
         .minTapTarget()
         .disabled(viewModel.isRefreshing)
     }
@@ -241,12 +244,6 @@ struct DashboardView: View {
                 .clipShape(Capsule())
         }
         .minTapTarget()
-    }
-
-    // MARK: - Group Products by Category
-    private func groupedProducts() -> [String: [Product]] {
-        let filtered = viewModel.filtered(products)
-        return Dictionary(grouping: filtered, by: { $0.category })
     }
 }
 
@@ -275,7 +272,9 @@ struct RestockSheet: View {
 
                 // Input
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("New Quantity")
+                    // "Set stock level to" is accurate — confirmRestock sets quantity = input,
+                    // it does NOT add to current stock. Label must match behavior.
+                    Text("Set stock level to")
                         .font(.subheadline)
                         .fontWeight(.medium)
 
@@ -398,6 +397,10 @@ struct ProductDetailView: View {
                     Button {
                         viewModel.selectedProduct = product
                         viewModel.showRestockSheet = true
+                        // DashboardView owns the sheet — setting showRestockSheet = true
+                        // here triggers DashboardView's .sheet modifier. No second
+                        // .sheet modifier on ProductDetailView is needed (or wanted —
+                        // two modifiers watching the same bool causes a SwiftUI conflict).
                     } label: {
                         Label("Mark Restocked", systemImage: "plus.circle.fill")
                             .frame(maxWidth: .infinity)
@@ -448,9 +451,9 @@ struct ProductDetailView: View {
         }
         .navigationTitle(product.name)
         .navigationBarTitleDisplayMode(.large)
-        .sheet(isPresented: $viewModel.showRestockSheet) {
-            RestockSheet(product: product, viewModel: viewModel, context: context)
-        }
+        // NOTE: No .sheet here. DashboardView owns the single RestockSheet.
+        // A second .sheet modifier on this view watching the same viewModel.showRestockSheet
+        // bool would create a SwiftUI sheet conflict when tapping "Mark Restocked".
     }
 
     // MARK: - Threshold Bar

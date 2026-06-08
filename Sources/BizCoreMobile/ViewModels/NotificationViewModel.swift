@@ -14,7 +14,6 @@ final class NotificationViewModel {
     @AppStorage("criticalAlertsEnabled") var criticalAlertsEnabled: Bool = true
     @AppStorage("lastCheckedTimestamp")  var lastCheckedTimestamp: Double = 0
 
-    /// Convenience wrapper so views bind to CheckFrequency directly
     var checkFrequency: CheckFrequency {
         get { CheckFrequency(rawValue: checkFrequencyHours) ?? .fourHours }
         set { checkFrequencyHours = newValue.rawValue }
@@ -50,7 +49,6 @@ final class NotificationViewModel {
         guard isPermissionGranted else { return }
         guard lowStockAlertsEnabled || criticalAlertsEnabled else { return }
 
-        // Filter based on which alerts are enabled
         let toNotify = products.filter { product in
             switch product.stockStatus {
             case .critical: return criticalAlertsEnabled
@@ -65,28 +63,15 @@ final class NotificationViewModel {
             quietEnd:   quietEndHour
         )
 
-        pendingAlertCount       = await service.pendingLowStockCount()
-        lastCheckedTimestamp    = Date().timeIntervalSince1970
+        pendingAlertCount    = await service.pendingLowStockCount()
+        lastCheckedTimestamp = Date().timeIntervalSince1970
     }
 
     // MARK: - Test Notification
+    // Calls scheduleTestNotification() directly on the service — bypasses quiet hours.
+    // The quietStart:25/quietEnd:25 trick does NOT work (see NotificationService comment).
     func sendTestNotification() async {
         guard isPermissionGranted else { return }
-
-        // Create a fake product for the test
-        let testProduct = Product(
-            id:           "test-notification",
-            name:         "Test Product",
-            category:     "Demo",
-            quantity:     2,
-            unit:         "pcs",
-            reorderLevel: 5
-        )
-
-        await service.checkAndNotify(
-            products:   [testProduct],
-            quietStart: 25, // impossible hour — bypasses quiet check
-            quietEnd:   25
-        )
+        await service.scheduleTestNotification()
     }
 }

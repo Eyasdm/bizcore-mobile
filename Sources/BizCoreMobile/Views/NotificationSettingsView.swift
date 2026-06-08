@@ -2,15 +2,22 @@ import SwiftUI
 import SwiftData
 
 // MARK: - NotificationSettingsView
-// Full notification settings screen — replaces Day 1 placeholder
+// Full notification settings screen
 // Features: permission toggle, low/critical toggles, frequency picker,
 //           quiet hours, test notification button, pending alert count
+//
+// NOTE: viewModel is injected from ContentView (shared with DashboardView)
+// so pendingAlertCount and isPermissionGranted stay in sync across both tabs.
 
 struct NotificationSettingsView: View {
 
     @Environment(\.modelContext) private var context
     @Query(sort: \Product.name) private var products: [Product]
-    @State private var viewModel = NotificationViewModel()
+
+    // Shared instance passed from ContentView — NOT a new @State object.
+    // @Bindable is needed for the Picker($viewModel.checkFrequency) bindings below.
+    @Bindable var viewModel: NotificationViewModel
+
     @State private var showPermissionAlert = false
 
     var body: some View {
@@ -134,7 +141,6 @@ struct NotificationSettingsView: View {
                                 )
                         }
 
-                        // Check now button
                         Button {
                             Task {
                                 await viewModel.triggerLowStockCheck(products: products)
@@ -145,7 +151,6 @@ struct NotificationSettingsView: View {
                         }
                         .minTapTarget()
 
-                        // Test notification button
                         Button {
                             Task {
                                 await viewModel.sendTestNotification()
@@ -257,6 +262,6 @@ struct NotificationSettingsView: View {
 
 // MARK: - Preview
 #Preview {
-    NotificationSettingsView()
+    NotificationSettingsView(viewModel: NotificationViewModel())
         .modelContainer(for: Product.self, inMemory: true)
 }

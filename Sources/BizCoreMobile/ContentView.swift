@@ -2,22 +2,22 @@ import SwiftUI
 
 // MARK: - ContentView
 // Root TabView — wires Dashboard and Alerts tabs
-// InventoryViewModel is shared so notifications can access product list
+// NotificationViewModel is created once here and shared to both tabs.
+// This keeps isPermissionGranted and pendingAlertCount in sync across tabs.
 
 struct ContentView: View {
 
-    // Shared across both tabs so NotificationSettingsView
-    // can trigger low-stock checks against live inventory
-    @State private var inventoryViewModel = InventoryViewModel()
+    // Single shared instance — both tabs read/write the same runtime state.
+    @State private var notificationViewModel = NotificationViewModel()
 
     var body: some View {
         TabView {
-            DashboardView(sharedViewModel: inventoryViewModel)
+            DashboardView(notificationViewModel: notificationViewModel)
                 .tabItem {
                     Label("Inventory", systemImage: "cube.box.fill")
                 }
 
-            NotificationSettingsView()
+            NotificationSettingsView(viewModel: notificationViewModel)
                 .tabItem {
                     Label("Alerts", systemImage: "bell.fill")
                 }

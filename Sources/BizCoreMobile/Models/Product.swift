@@ -59,14 +59,6 @@ enum StockStatus: String, Codable {
 
     var label: String { rawValue }
 
-    var color: String {
-        switch self {
-        case .inStock:  return "statusGreen"
-        case .low:      return "statusOrange"
-        case .critical: return "statusRed"
-        }
-    }
-
     var sfSymbol: String {
         switch self {
         case .inStock:  return "checkmark.circle.fill"

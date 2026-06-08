@@ -30,7 +30,6 @@ final class InventoryViewModel {
     func filtered(_ products: [Product]) -> [Product] {
         var result = products
 
-        // Apply search
         if !searchText.isEmpty {
             result = result.filter {
                 $0.name.localizedCaseInsensitiveContains(searchText) ||
@@ -38,7 +37,6 @@ final class InventoryViewModel {
             }
         }
 
-        // Apply status filter
         switch activeFilter {
         case .all:
             break
@@ -51,7 +49,13 @@ final class InventoryViewModel {
         return result
     }
 
-    // MARK: - Summary Counts (for dashboard header)
+    // MARK: - Grouped (for dashboard list and empty-state check)
+    // Single entry point so the empty check and the list render off the same call.
+    func groupedFiltered(_ products: [Product]) -> [String: [Product]] {
+        Dictionary(grouping: filtered(products), by: { $0.category })
+    }
+
+    // MARK: - Summary Counts
     func criticalCount(_ products: [Product]) -> Int {
         products.filter { $0.stockStatus == .critical }.count
     }
@@ -62,7 +66,6 @@ final class InventoryViewModel {
 
     // MARK: - Refresh from Supabase
     func refresh(context: ModelContext) async {
-        // In demo mode — skip network call and just use local data
         if DemoMode.isEnabled {
             await loadDemoData(context: context)
             return
@@ -74,10 +77,23 @@ final class InventoryViewModel {
         do {
             let remoteProducts = try await SupabaseService.shared.fetchProducts()
 
-            // Upsert into SwiftData
+            // Upsert: fetch existing records once, then update-or-insert per remote product.
+            // Without this, every refresh call would append duplicate rows because SwiftData's
+            // internal PersistentIdentifier differs from our custom id: String field.
+            let existing = try context.fetch(FetchDescriptor<Product>())
+            let existingByID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+            let isoFormatter = ISO8601DateFormatter()
+
             for remote in remoteProducts {
-                let product = remote.toProduct()
-                context.insert(product)
+                if let product = existingByID[remote.id] {
+                    // Record exists — update fields in place, no new row
+                    product.quantity            = remote.quantity
+                    product.lastUpdated         = isoFormatter.date(from: remote.updated_at ?? "") ?? .now
+                    product.isFlaggedForReorder = remote.flagged_for_reorder ?? false
+                } else {
+                    // New product — insert
+                    context.insert(remote.toProduct())
+                }
             }
 
             try context.save()
@@ -98,7 +114,7 @@ final class InventoryViewModel {
         isLoading = true
         errorMessage = nil
 
-        // Update locally first (optimistic update)
+        // Optimistic local update
         product.quantity = newQty
         product.lastUpdated = .now
         product.isFlaggedForReorder = false
@@ -106,7 +122,6 @@ final class InventoryViewModel {
         do {
             try context.save()
 
-            // Sync to Supabase if not in demo mode
             if !DemoMode.isEnabled {
                 try await SupabaseService.shared.updateQuantity(
                     productID: product.id,
@@ -143,7 +158,6 @@ final class InventoryViewModel {
 
     // MARK: - Demo Data Loader
     private func loadDemoData(context: ModelContext) async {
-        // Clear existing products first
         let descriptor = FetchDescriptor<Product>()
         if let existing = try? context.fetch(descriptor) {
             for product in existing {
@@ -151,7 +165,6 @@ final class InventoryViewModel {
             }
         }
 
-        // Insert demo products
         for product in DemoData.products {
             context.insert(product)
         }

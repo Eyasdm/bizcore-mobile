@@ -11,7 +11,6 @@ struct SupabaseConfig {
         guard let path = Bundle.main.path(forResource: "Config", ofType: "plist"),
               let dict = NSDictionary(contentsOfFile: path),
               let url = dict["SUPABASE_URL"] as? String else {
-            // Fallback for demo mode — returns empty string
             return ""
         }
         return url
@@ -98,17 +97,6 @@ actor SupabaseService {
         }
 
         return try JSONDecoder().decode([SupabaseProduct].self, from: data)
-    }
-
-    // MARK: - Fetch Low Stock Products
-    func fetchLowStock(threshold: Int = 0) async throws -> [SupabaseProduct] {
-        guard !baseURL.isEmpty else {
-            throw SupabaseError.missingConfig
-        }
-
-        // Fetch all and filter locally — simpler than building complex query
-        let all = try await fetchProducts()
-        return all.filter { $0.quantity < $0.reorder_level * 2 }
     }
 
     // MARK: - Update Quantity (Restock)

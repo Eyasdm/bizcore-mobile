@@ -54,6 +54,31 @@ actor NotificationService {
         await updateBadgeCount(lowStockProducts.count)
     }
 
+    // MARK: - Test Notification
+    // Bypasses quiet hours — this is an explicit manual test from the Settings screen.
+    // The quietStart:25/quietEnd:25 trick does NOT work: with quietStart >= quietEnd,
+    // isInQuietHours takes the wrap-around branch and hour < 25 is always true,
+    // so the guard always fires and no notification is ever scheduled.
+    // Fix: schedule directly here without going through checkAndNotify.
+
+    func scheduleTestNotification() async {
+        let content = UNMutableNotificationContent()
+        content.title = "Test Alert — BizCore"
+        content.body  = "Low Stock notifications are working correctly."
+        content.sound = .default
+        content.categoryIdentifier = categoryIdentifier
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+
+        let request = UNNotificationRequest(
+            identifier: "bizcore-test-\(Int(Date().timeIntervalSince1970))",
+            content:    content,
+            trigger:    trigger
+        )
+
+        try? await center.add(request)
+    }
+
     // MARK: - Cancel
 
     func cancelLowStockNotifications() async {

@@ -11,11 +11,12 @@ struct ProductRowView: View {
     var body: some View {
         HStack(spacing: 12) {
 
-            // Left: status color stripe
+            // Left: status color stripe (decorative — screen readers skip it)
             RoundedRectangle(cornerRadius: 3)
                 .fill(stripeColor)
                 .frame(width: 4)
                 .padding(.vertical, 2)
+                .accessibilityHidden(true)
 
             // Center: name + category
             VStack(alignment: .leading, spacing: 3) {
@@ -31,6 +32,7 @@ struct ProductRowView: View {
                         Image(systemName: "flag.fill")
                             .font(.caption2)
                             .foregroundStyle(.orange)
+                            .accessibilityLabel("Flagged for reorder")
                     }
                 }
 
