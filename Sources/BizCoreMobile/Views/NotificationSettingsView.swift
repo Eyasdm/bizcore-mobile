@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit  // UIApplication.openSettingsURLString + shared.open(_:)
 
 // MARK: - NotificationSettingsView
 // Full notification settings screen

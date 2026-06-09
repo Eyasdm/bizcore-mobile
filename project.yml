@@ -1,0 +1,43 @@
+# XcodeGen project spec for BizCore Mobile
+# -----------------------------------------
+# The repo ships as a Swift package (Package.swift) for tooling, but Xcode
+# cannot RUN a .library product as an iOS app. This spec generates a real
+# iOS application target so the app can launch on a simulator for screenshots.
+#
+# On a Mac:
+#   brew install xcodegen      # one time
+#   xcodegen generate          # creates BizCoreMobile.xcodeproj from this file
+#   open BizCoreMobile.xcodeproj
+#   # select the iPhone 15 Pro simulator and Run
+#
+# The generated .xcodeproj stays gitignored on purpose — it is a build
+# artifact, regenerated from this committed spec on each machine.
+
+name: BizCoreMobile
+
+options:
+  bundleIdPrefix: com.bizcore
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+targets:
+  BizCoreMobile:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Sources/BizCoreMobile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bizcore.BizCoreMobile
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"          # iPhone
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: BizCore
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES   # full-resolution rendering for screenshots
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

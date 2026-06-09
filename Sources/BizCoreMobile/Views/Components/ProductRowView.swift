@@ -31,7 +31,7 @@ struct ProductRowView: View {
                     if product.isFlaggedForReorder {
                         Image(systemName: "flag.fill")
                             .font(.caption2)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color(.systemOrange))
                             .accessibilityLabel("Flagged for reorder")
                     }
                 }

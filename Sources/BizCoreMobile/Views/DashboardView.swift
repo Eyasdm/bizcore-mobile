@@ -134,6 +134,8 @@ struct DashboardView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(count) \(label) products")
     }
 
     // MARK: - Filter Segment
@@ -243,6 +245,7 @@ struct DashboardView: View {
                 )
                 .clipShape(Capsule())
         }
+        .accessibilityLabel(DemoMode.isEnabled ? "Disable demo mode" : "Enable demo mode")
         .minTapTarget()
     }
 }
@@ -500,6 +503,8 @@ struct ProductDetailView: View {
         .padding()
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Stock level: \(product.quantity) \(product.unit). Reorder level: \(product.reorderLevel)")
     }
 
     private func metaRow(label: String, value: String) -> some View {
