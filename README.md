@@ -1,21 +1,23 @@
 # BizCore Mobile
 
-The shop owner is never at their desk when stock runs out. Their phone is always with them. iOS can push that alert. Desktop can't. That's why this app exists.
+The shop owner is never at their desk when stock runs out. Their phone is always with them. iOS can put that alert on their lock screen. Desktop can't. That's why this app exists.
 
 BizCore Mobile is a lightweight iOS inventory companion for [BizCore Desktop](#connection-to-bizcore-desktop) — a full ERP already running live in a real client's business. The client asked for low-stock alerts on their phone. I learned iOS to build it.
 
 ---
 
-<!-- SCREENSHOT DAY (June 11):
-     Replace the three blocks below with real simulator screenshots.
-     Suggested filenames: screenshot-dashboard.png, screenshot-detail.png, screenshot-alerts.png
-     Ideal size: 393×852 (iPhone 15 Pro simulator, no device frame needed)
--->
+## Screenshots
+
+Captured on the iPhone 15 Pro simulator in Demo mode (Al-Nour Boutique sample data).
 
 |                     Dashboard                      |                Product Detail                |                    Alerts                    |
 | :------------------------------------------------: | :------------------------------------------: | :------------------------------------------: |
 | ![Dashboard](screenshots/screenshot-dashboard.png) | ![Detail](screenshots/screenshot-detail.png) | ![Alerts](screenshots/screenshot-alerts.png) |
 |       Critical · Low · In Stock at a glance        |      Stock level bar + one-tap restock       |     Notification settings · quiet hours      |
+
+A delivered low-stock alert — the one thing the app exists to do:
+
+![Low-stock alert](screenshots/screenshot-notification.png)
 
 ---
 
@@ -23,15 +25,27 @@ BizCore Mobile is a lightweight iOS inventory companion for [BizCore Desktop](#c
 
 - **Live inventory dashboard** — products grouped by category, filterable by status (Critical / Low / All), full-text search
 - **SwiftData offline cache** — inventory available without a connection; syncs on pull-to-refresh
-- **Push notifications** — `UNUserNotificationCenter` alerts the moment any product drops below threshold, wherever the owner is
-- **One-tap restock** — writes quantity back to the shared Supabase database in real time
+- **Local low-stock alerts** — `UNUserNotificationCenter` notifications when a product drops below its reorder level. They fire instantly on every in-app check (open, refresh, restock) and on a best-effort background schedule via `BGAppRefreshTask` (see [How Notifications Work](#how-notifications-work))
+- **One-tap restock** — writes quantity back to the shared Supabase database, with rollback if the write fails so local and server never diverge
 - **Demo mode** — Al-Nour Boutique fictional inventory loads on first launch, no credentials needed
+
+---
+
+## How Notifications Work
+
+Being honest about the delivery model, because it matters:
+
+- **In-app checks (instant).** Opening the app, pull-to-refresh, and confirming a restock each run a low-stock check immediately. Any matching product fires a local notification right away — and because the app sets a `UNUserNotificationCenterDelegate`, the banner shows even while the app is open.
+- **Background checks (best-effort).** `BGAppRefreshTask` re-checks inventory on a schedule driven by the **Check Frequency** setting. iOS decides the exact run time based on usage, battery, and network — this is the standard behaviour for any background-refresh app, not a guaranteed delivery moment.
+- **Quiet hours and alert-type toggles** are respected on every path.
+
+These are **local** notifications scheduled on-device. For guaranteed delivery the instant stock changes on the server — independent of when the app last opened — the next milestone is a Supabase Edge Function calling **APNs** for true server push. The on-device paths above are what ships today; server push is the documented roadmap.
 
 ---
 
 ## Connection to BizCore Desktop
 
-BizCore Mobile shares the same Supabase backend as **BizCore Desktop**, a full Electron + React + SQLite ERP built for the same client (Al-Khattaf). The desktop app handles purchase orders, bookkeeping, and reporting. The mobile app adds the one thing desktop can't: push alerts to the owner's phone.
+BizCore Mobile shares the same Supabase backend as **BizCore Desktop**, a full Electron + React + SQLite ERP built for the same client (Al-Khattaf). The desktop app handles purchase orders, bookkeeping, and reporting. The mobile app adds the one thing desktop can't: alerts on the owner's phone.
 
 ```
 ┌─────────────────────┐        ┌──────────────────────┐
@@ -59,6 +73,8 @@ BizCore Desktop is a private repo (client work). Available on request.
 ![SwiftData](https://img.shields.io/badge/SwiftData-offline%20cache-34C759)
 ![Supabase](https://img.shields.io/badge/Supabase-REST%20API-3ECF8E?logo=supabase&logoColor=white)
 ![Architecture](https://img.shields.io/badge/Architecture-MVVM-blueviolet)
+
+Concurrency: `actor`-isolated `NotificationService` / `SupabaseService`, with a `Sendable` snapshot type crossing the actor boundary so SwiftData models never leave the main actor.
 
 ---
 
@@ -95,8 +111,9 @@ BizCore Desktop is a private repo (client work). Available on request.
 <summary><strong>Run with demo data (no credentials needed)</strong></summary>
 
 1. Clone the repo
-2. Open in Xcode 15+, target iOS 17 simulator
-3. Build and run — demo mode is **on by default**
+2. Generate the app target: `brew install xcodegen && xcodegen generate` (details in `MAC_SETUP.md`)
+3. Open in Xcode 15+, target iOS 17 simulator
+4. Build and run — demo mode is **on by default**
 
 The app opens with Al-Nour Boutique fictional inventory. Toggle demo mode at any time using the **Demo ON / Demo OFF** button in the top-left toolbar — no code change needed.
 
@@ -106,9 +123,9 @@ The app opens with Al-Nour Boutique fictional inventory. Toggle demo mode at any
 
 ## Project Context
 
-This is my first iOS app. I built it in ~2 weeks on a Windows machine (VS Code + borrowed Mac for Xcode compilation) because my client specifically asked for push notifications, and iOS was the only way to give them that reliably.
+This is my first iOS app. I built it in ~2 weeks on a Windows machine (VS Code + borrowed Mac for Xcode compilation) because my client specifically asked for low-stock alerts on their phone, and iOS was the way to give them that.
 
-The learning order: Swift structs and value semantics → `@Observable` + `@State` ownership model → SwiftData persistence → `UNUserNotificationCenter` → `actor`-based concurrency. The desktop ERP already existed and worked. The mobile app was built to solve one specific gap the client identified.
+The learning order: Swift structs and value semantics → `@Observable` + `@State` ownership model → SwiftData persistence → `UNUserNotificationCenter` → `actor`-based concurrency and `BGAppRefreshTask`. The desktop ERP already existed and worked. The mobile app was built to solve one specific gap the client identified.
 
 ---
 

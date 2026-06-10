@@ -16,7 +16,9 @@ struct NotificationSettingsView: View {
     @Query(sort: \Product.name) private var products: [Product]
 
     // Shared instance passed from ContentView — NOT a new @State object.
-    // @Bindable is needed for the Picker($viewModel.checkFrequency) bindings below.
+    // @Bindable gives direct $viewModel bindings for every persisted setting now
+    // that they are plain @Observable properties (no @AppStorage), so the toggles
+    // below no longer need hand-written Binding(get:set:) wrappers.
     @Bindable var viewModel: NotificationViewModel
 
     @State private var showPermissionAlert = false
@@ -37,10 +39,7 @@ struct NotificationSettingsView: View {
                 // MARK: Alert Types Section
                 if viewModel.isPermissionGranted {
                     Section {
-                        Toggle(isOn: Binding(
-                            get: { viewModel.lowStockAlertsEnabled },
-                            set: { viewModel.lowStockAlertsEnabled = $0 }
-                        )) {
+                        Toggle(isOn: $viewModel.lowStockAlertsEnabled) {
                             Label {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Low Stock Alerts")
@@ -56,10 +55,7 @@ struct NotificationSettingsView: View {
                         }
                         .minTapTarget()
 
-                        Toggle(isOn: Binding(
-                            get: { viewModel.criticalAlertsEnabled },
-                            set: { viewModel.criticalAlertsEnabled = $0 }
-                        )) {
+                        Toggle(isOn: $viewModel.criticalAlertsEnabled) {
                             Label {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Critical Alerts")
@@ -91,7 +87,7 @@ struct NotificationSettingsView: View {
                     } header: {
                         Text("Check Frequency")
                     } footer: {
-                        Text("How often the app checks for low-stock products in the background.")
+                        Text("How often the app re-checks inventory in the background. iOS decides the exact timing based on usage and battery; in-app checks (open, refresh, restock) always run instantly.")
                     }
 
                     // MARK: Quiet Hours Section
@@ -174,7 +170,7 @@ struct NotificationSettingsView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "info.circle")
                             .foregroundStyle(.secondary)
-                        Text("Notifications are delivered locally — no internet connection required.")
+                        Text("Alerts are delivered as local notifications scheduled on-device.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

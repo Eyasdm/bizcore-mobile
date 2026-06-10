@@ -96,7 +96,13 @@ actor SupabaseService {
             throw SupabaseError.serverError
         }
 
-        return try JSONDecoder().decode([SupabaseProduct].self, from: data)
+        // Distinguish a transport/server failure from a payload we couldn't parse,
+        // so the user sees an accurate message instead of a generic server error.
+        do {
+            return try JSONDecoder().decode([SupabaseProduct].self, from: data)
+        } catch {
+            throw SupabaseError.decodingError
+        }
     }
 
     // MARK: - Update Quantity (Restock)

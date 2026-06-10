@@ -26,7 +26,6 @@ final class InventoryViewModel {
     var restockQuantityText: String = ""
 
     // MARK: - Filter Products
-    // Called from DashboardView with the full @Query result
     func filtered(_ products: [Product]) -> [Product] {
         var result = products
 
@@ -50,7 +49,6 @@ final class InventoryViewModel {
     }
 
     // MARK: - Grouped (for dashboard list and empty-state check)
-    // Single entry point so the empty check and the list render off the same call.
     func groupedFiltered(_ products: [Product]) -> [String: [Product]] {
         Dictionary(grouping: filtered(products), by: { $0.category })
     }
@@ -77,23 +75,30 @@ final class InventoryViewModel {
         do {
             let remoteProducts = try await SupabaseService.shared.fetchProducts()
 
-            // Upsert: fetch existing records once, then update-or-insert per remote product.
-            // Without this, every refresh call would append duplicate rows because SwiftData's
-            // internal PersistentIdentifier differs from our custom id: String field.
+            // Upsert: fetch existing records once, then update-or-insert per remote
+            // product. Without this, every refresh would append duplicate rows
+            // because SwiftData's PersistentIdentifier differs from our custom
+            // id: String field.
             let existing = try context.fetch(FetchDescriptor<Product>())
             let existingByID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
             let isoFormatter = ISO8601DateFormatter()
 
             for remote in remoteProducts {
                 if let product = existingByID[remote.id] {
-                    // Record exists — update fields in place, no new row
                     product.quantity            = remote.quantity
                     product.lastUpdated         = isoFormatter.date(from: remote.updated_at ?? "") ?? .now
                     product.isFlaggedForReorder = remote.flagged_for_reorder ?? false
                 } else {
-                    // New product — insert
                     context.insert(remote.toProduct())
                 }
+            }
+
+            // Reconcile deletions: drop local rows that no longer exist remotely,
+            // so a product removed in BizCore Desktop also disappears here instead
+            // of lingering as a stale cache entry forever.
+            let remoteIDs = Set(remoteProducts.map(\.id))
+            for product in existing where !remoteIDs.contains(product.id) {
+                context.delete(product)
             }
 
             try context.save()
@@ -114,9 +119,15 @@ final class InventoryViewModel {
         isLoading = true
         errorMessage = nil
 
-        // Optimistic local update
-        product.quantity = newQty
-        product.lastUpdated = .now
+        // Snapshot for rollback. The previous version kept the optimistic local
+        // write even when the remote PATCH failed, leaving local and server stock
+        // permanently out of sync. Now a failed write reverts the local change.
+        let previousQty     = product.quantity
+        let previousUpdated = product.lastUpdated
+        let previousFlag    = product.isFlaggedForReorder
+
+        product.quantity            = newQty
+        product.lastUpdated         = .now
         product.isFlaggedForReorder = false
 
         do {
@@ -128,18 +139,28 @@ final class InventoryViewModel {
                     newQuantity: newQty
                 )
             }
-        } catch {
-            errorMessage = error.localizedDescription
-        }
 
-        isLoading = false
-        showRestockSheet = false
-        restockQuantityText = ""
-        selectedProduct = nil
+            // Success — close and reset.
+            isLoading           = false
+            showRestockSheet    = false
+            restockQuantityText = ""
+            selectedProduct     = nil
+        } catch {
+            // Roll back so the cached value matches the server.
+            product.quantity            = previousQty
+            product.lastUpdated         = previousUpdated
+            product.isFlaggedForReorder = previousFlag
+            try? context.save()
+
+            errorMessage = error.localizedDescription
+            isLoading    = false
+            // Sheet stays open so the user can retry.
+        }
     }
 
     // MARK: - Flag for Reorder
     func toggleFlag(product: Product, context: ModelContext) async {
+        let previous = product.isFlaggedForReorder
         product.isFlaggedForReorder.toggle()
 
         do {
@@ -152,6 +173,9 @@ final class InventoryViewModel {
                 )
             }
         } catch {
+            // Revert the flag if the server update fails.
+            product.isFlaggedForReorder = previous
+            try? context.save()
             errorMessage = error.localizedDescription
         }
     }

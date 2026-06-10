@@ -16,13 +16,7 @@ final class Product {
 
     // MARK: - Computed Properties
     var stockStatus: StockStatus {
-        if quantity < reorderLevel {
-            return .critical
-        } else if quantity < reorderLevel * 2 {
-            return .low
-        } else {
-            return .inStock
-        }
+        .from(quantity: quantity, reorderLevel: reorderLevel)
     }
 
     var statusLabel: String {
@@ -64,6 +58,22 @@ enum StockStatus: String, Codable {
         case .inStock:  return "checkmark.circle.fill"
         case .low:      return "exclamationmark.triangle.fill"
         case .critical: return "xmark.circle.fill"
+        }
+    }
+
+    // MARK: - Threshold rule (single source of truth)
+    // Both Product (the SwiftData model) and LowStockItem (the Sendable snapshot
+    // the notification layer uses) derive status from here, so "Low = below
+    // reorder × 2, Critical = below reorder" is defined in exactly one place.
+    // Previously the notification service re-applied a DIFFERENT rule
+    // (quantity <= reorderLevel), silently dropping most Low products.
+    static func from(quantity: Int, reorderLevel: Int) -> StockStatus {
+        if quantity < reorderLevel {
+            return .critical
+        } else if quantity < reorderLevel * 2 {
+            return .low
+        } else {
+            return .inStock
         }
     }
 }

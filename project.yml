@@ -12,6 +12,12 @@
 #
 # The generated .xcodeproj stays gitignored on purpose — it is a build
 # artifact, regenerated from this committed spec on each machine.
+#
+# NOTE: The Info.plist is now an explicit committed file (./Info.plist) rather
+# than auto-generated, because background-task keys (UIBackgroundModes,
+# BGTaskSchedulerPermittedIdentifiers) are arrays that GENERATE_INFOPLIST_FILE
+# cannot express. GENERATE_INFOPLIST_FILE is therefore NO and version/bundle
+# keys are filled from the build settings below via $(VARIABLE) substitution.
 
 name: BizCoreMobile
 
@@ -35,9 +41,6 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: BizCore
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES   # full-resolution rendering for screenshots
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
+        GENERATE_INFOPLIST_FILE: NO          # using the explicit Info.plist below
+        INFOPLIST_FILE: Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

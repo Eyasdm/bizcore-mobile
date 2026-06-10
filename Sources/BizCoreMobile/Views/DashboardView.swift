@@ -5,6 +5,10 @@ import SwiftData
 // Main inventory screen
 // Features: search, segmented filter, summary chips, ProductRowView list,
 //           pull-to-refresh, restock sheet, error alert, notification sync
+//
+// RestockSheet and ProductDetailView now live in their own files
+// (RestockSheet.swift, ProductDetailView.swift). This file previously held all
+// three structs at 554 lines; splitting keeps each screen independently readable.
 
 struct DashboardView: View {
 
@@ -67,6 +71,9 @@ struct DashboardView: View {
                 if products.isEmpty {
                     await viewModel.refresh(context: context)
                 }
+                // Keep permission state current so the post-restock check below
+                // isn't a silent no-op when the user granted access on the Alerts tab.
+                await notificationViewModel.refreshStatus()
             }
             // Single restock sheet — owned by DashboardView only.
             // ProductDetailView sets selectedProduct + showRestockSheet to trigger it.
@@ -84,10 +91,15 @@ struct DashboardView: View {
             } message: {
                 Text(viewModel.errorMessage ?? "")
             }
-            // After restock sheet closes, re-run low-stock check
-            // so Alerts tab badge count updates immediately
+            // After the restock sheet closes — by Confirm, Cancel, OR an interactive
+            // swipe-down — re-run the low-stock check so the Alerts badge updates,
+            // and clear the sheet's scratch state. Resetting here (not only in the
+            // Cancel button) fixes stale restockQuantityText / selectedProduct after
+            // a swipe dismiss.
             .onChange(of: viewModel.showRestockSheet) { _, isShowing in
                 if !isShowing {
+                    viewModel.restockQuantityText = ""
+                    viewModel.selectedProduct = nil
                     Task {
                         await notificationViewModel.triggerLowStockCheck(products: products)
                         await notificationViewModel.refreshStatus()
@@ -250,306 +262,8 @@ struct DashboardView: View {
     }
 }
 
-// MARK: - RestockSheet
-struct RestockSheet: View {
-
-    let product: Product
-    @Bindable var viewModel: InventoryViewModel
-    let context: ModelContext
-    @Environment(\.dismiss) private var dismiss
-    @FocusState private var isTextFieldFocused: Bool
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                // Product info
-                VStack(spacing: 6) {
-                    Text(product.name)
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                    Text("\(product.quantity) \(product.unit) currently in stock")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 8)
-
-                // Input
-                VStack(alignment: .leading, spacing: 8) {
-                    // "Set stock level to" is accurate — confirmRestock sets quantity = input,
-                    // it does NOT add to current stock. Label must match behavior.
-                    Text("Set stock level to")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-
-                    HStack {
-                        TextField("Enter quantity", text: $viewModel.restockQuantityText)
-                            .keyboardType(.numberPad)
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .focused($isTextFieldFocused)
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                        Text(product.unit)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .padding(.leading, 4)
-                    }
-                }
-                .padding(.horizontal)
-
-                // Reorder level reminder
-                HStack(spacing: 6) {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.secondary)
-                    Text("Reorder level: \(product.reorderLevel) \(product.unit)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                // Confirm button
-                Button {
-                    Task {
-                        await viewModel.confirmRestock(product: product, context: context)
-                    }
-                } label: {
-                    Group {
-                        if viewModel.isLoading {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Text("Confirm Restock")
-                                .fontWeight(.semibold)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(isValidQuantity ? Color.accentColor : Color(.systemGray4))
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-                .disabled(!isValidQuantity || viewModel.isLoading)
-                .padding(.horizontal)
-                .minTapTarget()
-            }
-            .navigationTitle("Restock")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
-                        viewModel.restockQuantityText = ""
-                        dismiss()
-                    }
-                    .minTapTarget()
-                }
-            }
-            .onAppear {
-                isTextFieldFocused = true
-            }
-        }
-        .presentationDetents([.medium])
-    }
-
-    private var isValidQuantity: Bool {
-        guard let qty = Int(viewModel.restockQuantityText) else { return false }
-        return qty > 0
-    }
-}
-
-// MARK: - ProductDetailView
-struct ProductDetailView: View {
-
-    let product: Product
-    @Bindable var viewModel: InventoryViewModel
-    @Environment(\.modelContext) private var context
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-
-                // Status + quantity
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\(product.quantity)")
-                            .font(.system(size: 52, weight: .bold, design: .rounded))
-                            .foregroundStyle(quantityColor)
-                        Text(product.unit)
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 8) {
-                        StatusBadge(status: product.stockStatus)
-                        Text("Reorder at \(product.reorderLevel)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                // Threshold bar
-                thresholdBar
-
-                // Action buttons
-                HStack(spacing: 12) {
-                    Button {
-                        viewModel.selectedProduct = product
-                        viewModel.showRestockSheet = true
-                        // DashboardView owns the sheet — setting showRestockSheet = true
-                        // here triggers DashboardView's .sheet modifier. No second
-                        // .sheet modifier on ProductDetailView is needed (or wanted —
-                        // two modifiers watching the same bool causes a SwiftUI conflict).
-                    } label: {
-                        Label("Mark Restocked", systemImage: "plus.circle.fill")
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .background(Color.accentColor)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .fontWeight(.medium)
-                    }
-                    .minTapTarget()
-
-                    Button {
-                        Task {
-                            await viewModel.toggleFlag(product: product, context: context)
-                        }
-                    } label: {
-                        Label(
-                            product.isFlaggedForReorder ? "Flagged" : "Flag",
-                            systemImage: product.isFlaggedForReorder ? "flag.fill" : "flag"
-                        )
-                        .frame(width: 100, height: 48)
-                        .background(
-                            product.isFlaggedForReorder
-                            ? Color(.systemOrange).opacity(0.15)
-                            : Color(.secondarySystemBackground)
-                        )
-                        .foregroundStyle(
-                            product.isFlaggedForReorder
-                            ? Color(.systemOrange)
-                            : .secondary
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .fontWeight(.medium)
-                    }
-                    .minTapTarget()
-                }
-
-                // Meta info
-                VStack(alignment: .leading, spacing: 8) {
-                    metaRow(label: "Category", value: product.category)
-                    metaRow(label: "Last Updated", value: product.lastUpdated.relativeFormatted)
-                }
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .padding()
-        }
-        .navigationTitle(product.name)
-        .navigationBarTitleDisplayMode(.large)
-        // NOTE: No .sheet here. DashboardView owns the single RestockSheet.
-        // A second .sheet modifier on this view watching the same viewModel.showRestockSheet
-        // bool would create a SwiftUI sheet conflict when tapping "Mark Restocked".
-    }
-
-    // MARK: - Threshold Bar
-    private var thresholdBar: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Stock Level")
-                .font(.subheadline)
-                .fontWeight(.medium)
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray5))
-                        .frame(height: 8)
-
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(quantityColor)
-                        .frame(width: geo.size.width * fillRatio, height: 8)
-                        .animation(.easeOut, value: fillRatio)
-
-                    let markerX = geo.size.width * thresholdRatio
-                    Rectangle()
-                        .fill(Color(.systemOrange))
-                        .frame(width: 2, height: 14)
-                        .offset(x: markerX - 1, y: -3)
-                }
-            }
-            .frame(height: 14)
-
-            HStack {
-                Text("0")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("Reorder: \(product.reorderLevel)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("Max: \(maxValue)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Stock level: \(product.quantity) \(product.unit). Reorder level: \(product.reorderLevel)")
-    }
-
-    private func metaRow(label: String, value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .font(.subheadline)
-                .fontWeight(.medium)
-        }
-    }
-
-    private var maxValue: Int { max(product.reorderLevel * 3, product.quantity + 1) }
-    private var fillRatio: CGFloat { min(CGFloat(product.quantity) / CGFloat(maxValue), 1.0) }
-    private var thresholdRatio: CGFloat { min(CGFloat(product.reorderLevel) / CGFloat(maxValue), 1.0) }
-
-    private var quantityColor: Color {
-        switch product.stockStatus {
-        case .inStock:  return Color(.systemGreen)
-        case .low:      return Color(.systemOrange)
-        case .critical: return Color(.systemRed)
-        }
-    }
-}
-
-// MARK: - Previews
+// MARK: - Preview
 #Preview("Dashboard") {
     DashboardView(notificationViewModel: NotificationViewModel())
         .modelContainer(for: Product.self, inMemory: true)
-}
-
-#Preview("Product Detail") {
-    NavigationStack {
-        ProductDetailView(
-            product: Product(
-                name: "White Cotton Fabric",
-                category: "Fabric",
-                quantity: 8,
-                unit: "meters",
-                reorderLevel: 10
-            ),
-            viewModel: InventoryViewModel()
-        )
-        .modelContainer(for: Product.self, inMemory: true)
-    }
 }
