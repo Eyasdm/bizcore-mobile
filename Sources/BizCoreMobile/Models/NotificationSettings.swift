@@ -1,7 +1,7 @@
 import Foundation
 
-// Stored via @AppStorage in NotificationViewModel
-// Not a SwiftData model — persisted in UserDefaults
+// Persisted via didSet → UserDefaults in NotificationViewModel (@Observable
+// is incompatible with @AppStorage). Not a SwiftData model.
 
 struct NotificationSettings {
     static let defaultCheckFrequencyHours: Int = 4
