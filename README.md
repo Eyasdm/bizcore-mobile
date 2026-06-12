@@ -17,7 +17,9 @@ Captured on the iPhone 15 Pro simulator in Demo mode (Al-Nour Boutique sample da
 
 A delivered low-stock alert — the one thing the app exists to do:
 
-![Low-stock alert](screenshots/screenshot-notification.png)
+<p align="center">
+  <img src="screenshots/screenshot-notification.png" alt="Low-stock alert banner" width="500">
+</p>
 
 ---
 
