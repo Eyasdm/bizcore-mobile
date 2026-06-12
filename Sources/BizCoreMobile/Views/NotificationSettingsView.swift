@@ -10,7 +10,7 @@ import UIKit  // UIApplication.openSettingsURLString + shared.open(_:)
 // NOTE: viewModel is injected from ContentView (shared with DashboardView)
 // so pendingAlertCount and isPermissionGranted stay in sync across both tabs.
 
-struct NotificationSettingsView: View {
+@MainActor struct NotificationSettingsView: View {
 
     @Environment(\.modelContext) private var context
     @Query(sort: \Product.name) private var products: [Product]

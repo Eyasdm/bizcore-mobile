@@ -10,7 +10,7 @@ import SwiftData
 // (RestockSheet.swift, ProductDetailView.swift). This file previously held all
 // three structs at 554 lines; splitting keeps each screen independently readable.
 
-struct DashboardView: View {
+@MainActor struct DashboardView: View {
 
     @Environment(\.modelContext) private var context
     @Query(sort: \Product.name) private var products: [Product]

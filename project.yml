@@ -43,4 +43,5 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"          # iPhone
         GENERATE_INFOPLIST_FILE: NO          # using the explicit Info.plist below
         INFOPLIST_FILE: Info.plist
+        PRODUCT_NAME: BizCoreMobile
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

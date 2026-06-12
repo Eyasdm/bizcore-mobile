@@ -10,7 +10,7 @@ import SwiftData
 // DashboardView's .onChange(of: showRestockSheet) so every dismissal path —
 // Confirm, Cancel, or swipe-down — leaves a clean slate for the next product.
 
-struct RestockSheet: View {
+@MainActor struct RestockSheet: View {
 
     let product: Product
     @Bindable var viewModel: InventoryViewModel

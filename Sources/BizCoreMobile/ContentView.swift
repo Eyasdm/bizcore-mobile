@@ -5,7 +5,7 @@ import SwiftUI
 // NotificationViewModel is created once here and shared to both tabs, so
 // isPermissionGranted, pendingAlertCount, and lastChecked stay in sync.
 
-struct ContentView: View {
+@MainActor struct ContentView: View {
 
     @Environment(\.scenePhase) private var scenePhase
 
